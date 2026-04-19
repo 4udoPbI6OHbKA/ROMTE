@@ -16,7 +16,7 @@ class RegisterOfMovemenTechnicalEquipmentApp:
         self.top_frame.place(relwidth=1, relheight=0.1)
         self.top_frame.columnconfigure(1, weight=1)
 
-        self.title_label = tk.Label(self.root, text="ROMTE\nРеестр перемещения технического оборудования",font="size=20", bg="white")
+        self.title_label = tk.Label(self.root, text="ROMTE\nРеестр перемещения технического оборудования",font="size=40", bg="white")
         self.title_label.pack(pady=2, ipadx=60, ipady=20)
 
         self.bottom_frame = tk.Frame(self.root, bg="white", highlightbackground="black", highlightthickness=2)
@@ -194,6 +194,56 @@ class RegisterOfMovemenTechnicalEquipmentApp:
         self.confirm_delete_button = tk.Button(self.dlt, text="Подтвердить\nудаление запроса", command=self.delete_request)
         self.confirm_delete_button.place(rely=0.85, relx=0.6)
 
+    def load_technical_table(self):
+        if self.tree:
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+
+        if not os.path.exists(self.DB_NAME):
+            print(f"Ошибка: Файл базы данных '{self.DB_NAME}' не найден.")
+            return
+
+        try:
+            conn = sqlite3.connect(self.DB_NAME)
+            cursor = conn.cursor()
+
+            cursor.execute(f"PRAGMA table_info({self.TABLE_NAME});")
+            columns_info = cursor.fetchall()
+            column_names = [col[1] for col in columns_info]
+
+            if self.tree is None:
+                self.tree = ttk.Treeview(self.table_frame, columns=column_names, show='headings')
+
+                for col in column_names:
+                    self.tree.heading(col, text=col)
+                    self.tree.column(col, width=150, anchor='center')
+
+                if self.sсrollbar is None:
+                    self.sсrollbar = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree.yview)
+                    self.tree.configure(yscrollcommand=self.sсrollbar.set)
+                    self.sсrollbar.pack(side='right', fill='y')
+                    self.tree.pack(side='left', fill='both', expand=True)
+                else:
+                    self.tree.pack(side='left', fill='both', expand=True)
+            else:
+                if not self.tree.winfo_ismapped():
+                    self.tree.pack(side='left', fill='both', expand=True)
+                    if self.sсrollbar:
+                        self.sсrollbar.pack(side='right', fill='y')
+
+            cursor.execute(f"SELECT * FROM {self.TABLE_NAME}")
+            rows = cursor.fetchall()
+
+            for row in rows:
+                self.tree.insert("", tk.END, values=row)
+
+            conn.close()
+
+        except sqlite3.Error as e:
+            print(f"Ошибка при работе с базой данных: {e}")
+        except Exception as e:
+            print(f"Произошла непредвиденная ошибка: {e}")
+
     
 
     def load_requests_table(self):
@@ -259,7 +309,7 @@ class RegisterOfMovemenTechnicalEquipmentApp:
         self.room_combobox.set("")
         self.room_combobox.config(state="readonly" if available_rooms else "disabled")
 
-    def parse_id_string(self, id_string):
+    def decoding_id_string(self, id_string):
         unique_ids = set()
         if not id_string:
             return list(unique_ids)
@@ -323,7 +373,7 @@ class RegisterOfMovemenTechnicalEquipmentApp:
             messagebox.showwarning("Предупреждение", "Пожалуйста, выберите помещение.")
             return
 
-        equipment_ids_parsed = self.parse_id_string(entered_ids_str)
+        equipment_ids_parsed = self.decoding_id_string(entered_ids_str)
         if equipment_ids_parsed is None:
             return
 
@@ -353,8 +403,8 @@ class RegisterOfMovemenTechnicalEquipmentApp:
                     return
 
             updated_count = 0
-            skipped_count = 0 # Счетчик пропущенных единиц
-            valid_equipment_ids_for_request = [] # ID, которые будут добавлены в запрос
+            skipped_count = 0
+            valid_equipment_ids_for_request = []
 
             for eq_id in equipment_ids_parsed:
                 cursor.execute(f"SELECT COUNT(*), Статус FROM {self.TABLE_NAME} WHERE ID = ?", (eq_id,))
@@ -366,13 +416,11 @@ class RegisterOfMovemenTechnicalEquipmentApp:
 
                 current_status = count_data[1]
 
-                # --- Проверка статуса ---
                 if current_status == "Ожидает перемещения":
                     messagebox.showwarning("Предупреждение", f"Оборудование с ID {eq_id} уже ожидает перемещения и будет пропущено.")
                     skipped_count += 1
                     continue
 
-                # --- Обновление в техническом реестре ---
                 cursor.execute(f"""
                     UPDATE {self.TABLE_NAME}
                     SET "Требуемое местоположение" = ?, Статус = ?, "Последнее обновление статуса" = ?
@@ -380,7 +428,7 @@ class RegisterOfMovemenTechnicalEquipmentApp:
                 """, (new_location, new_status, update_datetime_str, eq_id))
                 
                 updated_count += 1
-                valid_equipment_ids_for_request.append(eq_id) # Добавляем ID, который действительно был обновлен
+                valid_equipment_ids_for_request.append(eq_id)
 
             conn.commit()
 
@@ -437,7 +485,7 @@ class RegisterOfMovemenTechnicalEquipmentApp:
 
             requested_tech_count, original_id_string = request_data
 
-            equipment_ids_to_execute = self.parse_id_string(original_id_string)
+            equipment_ids_to_execute = self.decoding_id_string(original_id_string)
             if equipment_ids_to_execute is None:
                 messagebox.showerror("Ошибка", "Не удалось разобрать ID техники из запроса.")
                 return
@@ -510,7 +558,7 @@ class RegisterOfMovemenTechnicalEquipmentApp:
 
             requested_tech_count, original_id_string = request_data
 
-            equipment_ids_to_execute = self.parse_id_string(original_id_string)
+            equipment_ids_to_execute = self.decoding_id_string(original_id_string)
             if equipment_ids_to_execute is None:
                 messagebox.showerror("Ошибка", "Не удалось разобрать ID техники из запроса.")
                 return
@@ -556,55 +604,6 @@ class RegisterOfMovemenTechnicalEquipmentApp:
             if conn:
                 conn.close()
 
-    def load_technical_table(self):
-        if self.tree:
-            for item in self.tree.get_children():
-                self.tree.delete(item)
-
-        if not os.path.exists(self.DB_NAME):
-            print(f"Ошибка: Файл базы данных '{self.DB_NAME}' не найден.")
-            return
-
-        try:
-            conn = sqlite3.connect(self.DB_NAME)
-            cursor = conn.cursor()
-
-            cursor.execute(f"PRAGMA table_info({self.TABLE_NAME});")
-            columns_info = cursor.fetchall()
-            column_names = [col[1] for col in columns_info]
-
-            if self.tree is None:
-                self.tree = ttk.Treeview(self.table_frame, columns=column_names, show='headings')
-
-                for col in column_names:
-                    self.tree.heading(col, text=col)
-                    self.tree.column(col, width=150, anchor='center')
-
-                if self.sсrollbar is None:
-                    self.sсrollbar = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree.yview)
-                    self.tree.configure(yscrollcommand=self.sсrollbar.set)
-                    self.sсrollbar.pack(side='right', fill='y')
-                    self.tree.pack(side='left', fill='both', expand=True)
-                else:
-                    self.tree.pack(side='left', fill='both', expand=True)
-            else:
-                if not self.tree.winfo_ismapped():
-                    self.tree.pack(side='left', fill='both', expand=True)
-                    if self.sсrollbar:
-                        self.sсrollbar.pack(side='right', fill='y')
-
-            cursor.execute(f"SELECT * FROM {self.TABLE_NAME}")
-            rows = cursor.fetchall()
-
-            for row in rows:
-                self.tree.insert("", tk.END, values=row)
-
-            conn.close()
-
-        except sqlite3.Error as e:
-            print(f"Ошибка при работе с базой данных: {e}")
-        except Exception as e:
-            print(f"Произошла непредвиденная ошибка: {e}")
 
 if __name__ == "__main__":
     root = tk.Tk()
