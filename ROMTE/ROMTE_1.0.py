@@ -43,7 +43,7 @@ class RegisterOfMovemenTechnicalEquipmentApp:
         self.show_requests_button = tk.Button(text="Просмотр\nзапросов", command=self.show_requests_table)
         self.show_requests_button.place(relx=0.465, rely=0.93, width=100, height=40)
         
-        self.delete_request_button = tk.Button(text="Удаление\nзапросов", command=self.delete_request_window)
+        self.delete_request_button = tk.Button(text="Удаление\nзапроса", command=self.delete_request_window)
         self.delete_request_button.place(relx=0.665, rely=0.93, width=100, height=40)
 
         self.exit_button = tk.Button(text="Выход", command=self.root.destroy)
